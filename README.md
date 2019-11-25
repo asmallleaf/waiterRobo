@@ -1,6 +1,8 @@
 ### Introduction
 __This is ACS6502 Project of Group 3__
+
 __This is a waiter robot as well as a balancing robot__
+
 __And nice to meet you__
 
 ----
