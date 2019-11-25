@@ -42,7 +42,7 @@ void create_msg(Msg* msg,int size){
 
 void release_msgs(Msgs* msgs){
     if (msgs->pos>-1){
-        for(int i=0;i<msgs->size;++i)
+        for(int i=0;i<=msgs->pos;++i)
             release_msg(msgs->pbuffer[i]);
     }
     msgs->size=0;

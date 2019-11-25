@@ -1,3 +1,6 @@
+#ifndef BLUETOOTH_H
+#define BLUETOOTH_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,3 +38,4 @@ int pop(Msgs* msgs, Msg* msg);
 Msg* join(Msg* msg, char* str);
 // change int into string
 char* int2str(int num);
+#endif

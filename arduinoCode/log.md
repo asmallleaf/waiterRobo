@@ -10,8 +10,17 @@ __Enjoy codes!!__
 - launch.ino
 - bluetooth.h
 - bluetooth.c
+- motor.c
+- motor.h
+- sensor.c
+- sensor.h
+- timer.c
+- timer.h
 ``` 
 ---
+![structure](structure.png)
+
+----
 #### Notes
 __actually a chatting board__
 1.Rule of version number(__A.XY+LTS__)
@@ -24,6 +33,18 @@ __actually a chatting board__
 
 ---
 #### Update log
+[11.25] Weng:
+```C
++ file structure updated. The current version is 1.02
+  new files:
+    - motor.c && motor.h
+    - sensor.c && sensor.h
+    - timer.c. && timer.h
+    (motor and sensor still in developing)
++ new library has been added to use MPU6050 module
+  source: https://github.com/jrowberg/i2cdevlib/tree/master/Arduino
++ the detailed logic graph has been released
+```
 [11.19] Weng:
 ```c
 + API of bluetooth has been updated. The current version is 1.01
