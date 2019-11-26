@@ -8,5 +8,14 @@
 //#define KP
 //#define KD
 
+typedef struct PIDOUT{
+    float measured;
+    float setted;
+    float error;
+    float last_error;
+}PidOut;
+
+void setmotor(int left,int right);
+int pid(PidOut* outs);
 
 #endif

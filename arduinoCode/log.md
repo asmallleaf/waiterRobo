@@ -33,6 +33,34 @@ __actually a chatting board__
 
 ---
 #### Update log
+[11.26] Weng:
+```c
++ version 1.03
++ bluetooth function has been tested roughly. 
+  It can transfer through both of bluetooth and serial communication now
+  an example to use it is as followed:
+  //create a message stack, can hold 9 messages
+  Msgs* msgs = create_msgs(9); 
+  //create a message of "hello world". It can hold 50 characters.
+  Msg* msg = create_msg("hello world",50); 
+  //pull the message into message stack
+  pull(msgs,msg);
+  //send the message through serial port
+  send(msgs);
+  //release the message stack(in fact it may not happen)
+  release_msgs(msgs);
++ the motor file has been updated. These are new methods
+  typedef struct PIDOUT{
+    float measured;
+    float setted;
+    float error;
+    float last_error;
+    }PidOut;
+    void setmotor(int left,int right);
+    int pid(PidOut* outs);
++ int2str function has been disabled since bugs
+```
+
 [11.25] Weng:
 ```C
 + file structure updated. The current version is 1.02

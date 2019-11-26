@@ -27,17 +27,23 @@ void printMsg(){
     delay(1000);
 }
 
-void create_msgs(Msgs* msgs, int size){
-    Msg* ptemp = (Msg*)malloc(sizeof(Msg)*size);
+Msgs* create_msgs(int size){
+    Msgs* msgs = (Msgs*)malloc(sizeof(Msgs));
+    Msg** ptemp = (Msg**)malloc(sizeof(Msg*)*size);
     msgs->size = size;
     msgs->pbuffer = ptemp;
     msgs->pos = -1;
+    return msgs;
 }
 
-void create_msg(Msg* msg,int size){
+Msg* create_msg(char* str, int size){
+    Msg* msg = (Msg*)malloc(sizeof(Msg));
     char* ptemp = (char*)malloc(sizeof(char)*size);
+    msg->pbuffer = ptemp;
+    strcpy(msg->pbuffer,str);
     msg->length = size;
     msg->pos = -1;
+    return msg;
 }
 
 void release_msgs(Msgs* msgs){
@@ -54,9 +60,20 @@ void release_msg(Msg* msg){
     free(msg->pbuffer);
 }
 
-void send(Msgs* msgs){
+void send(Msgs* msgs,int num){
     if(msgs->pos>-1){
-        Serail3.write(msgs->pbuffer[msgs->pos].pbuffer);
+        if (num == 0)
+            Serail0.write(msgs->pbuffer[msgs->pos]->pbuffer);
+        else if(num == 1)
+        {
+            Serail1.write(msgs->pbuffer[msgs->pos]->pbuffer);
+        }
+        else if(num == 2){
+            Serail2.write(msgs->pbuffer[msgs->pos]->pbuffer);
+        }
+        else if(num == 3){
+            Serail3.write(msgs->pbuffer[msgs->pos]->pbuffer);
+        }
         release_msg(msgs->pbuffer[msgs->pos]);
         --(msgss->pos);
     }
@@ -95,9 +112,9 @@ Msg* join(Msg* msg, char* str){
     }
     return msg;
 }
-
+/*
 char* int2str(int num){
     char temp[10];
-    itoa(num, str, 10);
+    itoa(num, temp, 10);
     return temp;
-}
+}*/

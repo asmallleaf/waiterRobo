@@ -13,7 +13,7 @@ typedef struct MSG{
 
 typedef struct MSGS{
     int size;
-    Msg* pbuffer;
+    Msg** pbuffer;
     int pos;
 }Msgs;
 // initial bluetooth
@@ -21,9 +21,9 @@ void setBt();
 // print initial msg
 void printMsg();
 // create message stack
-void create_msgs(Msgs* msgs,int size);
+Msgs* create_msgs(int size);
 // create a message
-void create_msg(Msg* msg,int size);
+Msg* create_msg(char* str,int size);
 // clear the whole stack
 void release_msgs(Msgs* msgs);
 // delet the message

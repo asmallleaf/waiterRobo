@@ -3,7 +3,7 @@
 
 #define BASE_TIME 20
 
-typedef structure TIMER{
+typedef struct TIMER{
     int set;
     int now;
     int isEnd;
