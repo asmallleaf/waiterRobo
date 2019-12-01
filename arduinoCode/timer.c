@@ -1,10 +1,12 @@
 #include "timer.h"
 
 void start(Timer* timer, int time){
-    timer->set = time%BASE_TIME;
-    timer->now = 0;
-    timer->isStart = 1;
-    timer->isEnd = 0;
+    if(timer->isStart==0){
+        timer->set = time%BASE_TIME;
+        timer->now = 0;
+        timer->isStart = 1;
+        timer->isEnd = 0;
+    }
 }
 
 void update(Timer* timer){

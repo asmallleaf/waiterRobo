@@ -33,6 +33,50 @@ __actually a chatting board__
 
 ---
 #### Update log
+[12.1] Weng:
+```c
++ version 2.01
++ file structure has changed, now motor.c/.h is combined with
+  sensor.c/.h, becomes driving.c/h
++ first version of operation of imu has been added into driving.h
+  methods of motor has been changed to adpat to motor driver
+  the methods of driving.c/h is as followed:
+    //setup function of driving.h
+    void setup_driving(Imu* imu,MPU6050* mpu6050);
+    /*wait to be realized*/
+    void update(int* sensors,int size);
+    int check(int sensor);
+    int checks(int* sensors,int size);
+    //IMU operation
+    void initImu(Imu* imu,MPU6050* mpu6050);
+    void updateImu(Imu* imu);
+    void printImu(Imu* imu);
+    //Motor operation
+    void set_motor(int left,int right);
+    void set_lmotor_dir(int one,int two);
+    void set_rmotor_dir(int one,int two);
+    //PID calculation
+    void setup_pid(Pid* pid);
+    int pid(Pid* pid,Imu* imu,float setVal);
+    void printPID(Pid* pid);
++ start_time function of timer.c has been changed, now it can
+  can be used as:
+    Timer timer;
+    start_time(&timer,1000);
+    if(timer.isEnd){
+        .....
+        reset(&timer);
+    }
+    delay(BASE_DELAY);
++ some demo has been added into  lauch.ino, including
+    - test for motor
+    - test for imu
++ some reference has been added, including:
+    - https://miaowlabs.com/book/MWbalanced/complementary-filter.html
+    - http://42bots.com/tutorials/arduino-script-for-mpu-6050-auto-calibration/
+    - https://www.instructables.com/id/Arduino-Self-Balancing-Robot-1/
+```
+
 [11.26] Weng:
 ```c
 + version 1.03

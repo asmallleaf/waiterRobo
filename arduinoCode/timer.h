@@ -1,7 +1,7 @@
 #ifndef TIMER_H
 #define TIMER_H
 
-#define BASE_TIME 20
+#define BASE_TIME 5
 
 typedef struct TIMER{
     int set;

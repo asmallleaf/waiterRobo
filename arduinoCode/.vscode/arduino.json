@@ -2,5 +2,5 @@
     "board": "arduino:avr:mega",
     "configuration": "cpu=atmega2560",
     "port": "COM3",
-    "sketch": "bluetooth.ino"
+    "sketch": "i2cdevlib-master\\Arduino\\MPU6050\\examples\\MPU6050_DMP6_using_DMP_V6.12\\MPU6050_DMP6_using_DMP_V6.12.ino"
 }
