@@ -19,7 +19,7 @@
 #define IR_FRONT A2
 #define IR_RIGHT A3
 #define LIMIT4IR 100
-#define INTERRUPT 2
+#define INTERRUPT 18
 /*Motor config*/
 #define LMOTOR_DIR1 4
 #define LMOTOR_DIR2 5
@@ -35,8 +35,10 @@
 #define Y_GYRO_OFFSET 0
 #define Z_GYRO_OFFSET 1688//0
 /*basic define constant*/
+#define __STOP__
+//#define __TEST__
 #define BASE_TIME 0.05
-#define KP 40 //25
+#define KP 10 //25
 #define KI 0
 #define KD 0  //0.02
 const float ANGLE2PWM_L=0.6;
@@ -192,14 +194,18 @@ void loop() {
       start(&timer,10);
       update(&timer);
       if(!timer.isEnd)continue;
-      //pwm_val = pid(0.2);
-      pwm_val = pid2(0.2);
-      Serial.print("pwm: ");
-      Serial.println(pwm_val);
-      set_motor(pwm_val,pwm_val);
+//      pwm_val = pid2(0.2);
+//      Serial.print("pwm: ");
+//      Serial.println(pwm_val);
+      #ifdef __TEST__
+      set_motor(30,30);
+      //set_motor(pwm_val,pwm_val);
+      #endif
+      #ifdef __STOP__
+      set_motor(0,0);
+      #endif
       reset(&timer);
       //Serial.println(pwm_val);
-      //set_motor(0,0);
       //printImu();
       //printPID();
      }
@@ -219,7 +225,8 @@ void loop() {
       }
       
       updateImu();
-      //printImu();
+      pwm_val = pid(0.2);
+      printImu();
      }
      
      //delay(1000);
@@ -371,11 +378,18 @@ void updateImu(){
       mpu.dmpGetQuaternion(&imu.quater,fifoBuffer);
       mpu.dmpGetGravity(&imu.gravity,&imu.quater);
       mpu.dmpGetYawPitchRoll(imu.ypr,&imu.quater,&imu.gravity);
-      imu.gyroX = mpu.getRotationX();
-      imu.gyroX_f = (float)imu.gyroX/32.8;
+      //imu.gyroX = mpu.getRotationX();
+      //imu.gyroX_f = (float)imu.gyroX/32.8;
 }
 
+int now  = millis();
+int last = 0;
+
 void printImu(){
+    last = now;
+    now = millis();
+    Serial.print(now-last);
+    Serial.print(", ");
     Serial.print(F("pitch: "));
     Serial.println(imu.ypr[1]*180/M_PI);
     //Serial.print(F("yaw: "));
