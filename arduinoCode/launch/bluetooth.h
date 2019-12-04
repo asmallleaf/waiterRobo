@@ -4,12 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arduino.h>
 
-typedef struct MSG{
+struct Msg{
     int length;
     int pos;
     char* pbuffer;
-}Msg;
+};
 
 typedef struct MSGS{
     int size;

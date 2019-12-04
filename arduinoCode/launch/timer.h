@@ -3,9 +3,13 @@
 
 #define BASE_TIME 5
 
+#include <arduino.h>
+
 typedef struct TIMER{
     int set;
     int now;
+    unsigned long time_stamp1;
+    unsigned long time_stamp2;
     int isEnd;
     int isStart;
 }Timer;

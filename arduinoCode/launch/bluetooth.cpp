@@ -63,19 +63,19 @@ void release_msg(Msg* msg){
 void send(Msgs* msgs,int num){
     if(msgs->pos>-1){
         if (num == 0)
-            Serail0.write(msgs->pbuffer[msgs->pos]->pbuffer);
+            Serial.write(msgs->pbuffer[msgs->pos]->pbuffer);
         else if(num == 1)
         {
-            Serail1.write(msgs->pbuffer[msgs->pos]->pbuffer);
+            Serial1.write(msgs->pbuffer[msgs->pos]->pbuffer);
         }
         else if(num == 2){
-            Serail2.write(msgs->pbuffer[msgs->pos]->pbuffer);
+            Serial2.write(msgs->pbuffer[msgs->pos]->pbuffer);
         }
         else if(num == 3){
-            Serail3.write(msgs->pbuffer[msgs->pos]->pbuffer);
+            Serial3.write(msgs->pbuffer[msgs->pos]->pbuffer);
         }
         release_msg(msgs->pbuffer[msgs->pos]);
-        --(msgss->pos);
+        --(msgs->pos);
     }
 }
 
