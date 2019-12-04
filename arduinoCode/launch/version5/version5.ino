@@ -36,9 +36,9 @@
 #define Z_GYRO_OFFSET 1688//0
 /*basic define constant*/
 #define BASE_TIME 0.05
-#define KP 40 //25
+#define KP 25
 #define KI 0
-#define KD 0  //0.02
+#define KD 0.02
 const float ANGLE2PWM_L=0.6;
 const float ANGLE2PWM_R=0.6;
 #define MIN_PWM_L 25
@@ -56,8 +56,6 @@ struct Imu{
   bool dmpState;
   uint8_t imuInterruptState;
   uint8_t devState;
-  int16_t gyroX;
-  float gyroX_f;
 };
 
 struct myPID{
@@ -105,6 +103,10 @@ uint16_t fifoCount;     // count of all bytes currently in FIFO
 uint8_t fifoBuffer[64]; // FIFO storage buffer
 int pwm_val=0;
 volatile bool imuInterrupt = false; // variable in interrupt
+
+//version 5
+int16_t gyro[3]={};
+float gyro_f[3]={};
 /***********************************************/
 /*             functions                       */
 /***********************************************/
@@ -118,9 +120,6 @@ int check(int sensor);
 int checks(int* sensors,int size);
 
 //IMU operation
-void dmpReady(){imuInterrupt = true;}
-bool check_Int();
-bool collect_Int();
 void releaseImu();
 void updateImu();
 void printImu();
@@ -134,7 +133,6 @@ void set_rmotor_dir(int one,int two);
 //PID calculation
 void setup_pid();
 int pid(float setVal);
-int pid2(float setVal);
 void printPID();
 
 //timer operation
@@ -180,49 +178,23 @@ void setup() {
 }
 
 void loop() {
-    /*test demo for motor*/
-    //set_motor(255,255);
-    
-    /*test demo for imu*/
-     while(!imuInterrupt && fifoCount < packetSize){
-      if(imuInterrupt && fifoCount < packetSize){
-        fifoCount = mpu.getFIFOCount();
-      }
-      //Serial.println("run motor!");
-      start(&timer,10);
-      update(&timer);
-      if(!timer.isEnd)continue;
-      //pwm_val = pid(0.2);
-      pwm_val = pid2(0.2);
-      Serial.print("pwm: ");
-      Serial.println(pwm_val);
-      set_motor(pwm_val,pwm_val);
-      reset(&timer);
-      //Serial.println(pwm_val);
-      //set_motor(0,0);
-      //printImu();
-      //printPID();
-     }
-
-     imuInterrupt = false;
-     imu.imuInterruptState = mpu.getIntStatus();
-     fifoCount = mpu.getFIFOCount();
-
-     if((imu.imuInterruptState & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount >= 1024){
-      mpu.resetFIFO();
-      //fifoCount = mpu.getFIFOCount();
-     }
-     else if(imu.imuInterruptState & _BV(MPU6050_INTERRUPT_DMP_INT_BIT)){
-      while (fifoCount >= packetSize){
-        mpu.getFIFOBytes(fifoBuffer,packetSize);
-        fifoCount -= packetSize;
-      }
-      
-      updateImu();
-      //printImu();
-     }
+    updateImu();
+    //Serial.println("run motor!");
+//    start(&timer,10);
+//    update(&timer);
+//    if(!timer.isEnd)continue;
+    pwm_val = pid(0.2);
+    Serial.print("pwm: ");
+    Serial.println(pwm_val);
+    set_motor(pwm_val,pwm_val);
+//    reset(&timer);
+    //Serial.println(pwm_val);
+    //set_motor(0,0);
+    //printImu();
+    //printPID();      
+    //printImu();
      
-     //delay(1000);
+     delay(100);
 }
 
 /***********************************************/
@@ -242,7 +214,6 @@ void setup_driving(){
     
     Serial.println("initializing mpu....");
     mpu.initialize();
-    pinMode(INTERRUPT,INPUT);
     if(mpu.testConnection()){
         Serial.println("connected!");
     }
@@ -256,7 +227,6 @@ void setup_driving(){
         Fastwire::setup(400, true);
     #endif
     delay(500);
-    imu.devState = mpu.dmpInitialize();
     mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_1000);
     mpu.setXGyroOffset(X_GYRO_OFFSET);
     mpu.setYGyroOffset(Y_GYRO_OFFSET);
@@ -267,14 +237,6 @@ void setup_driving(){
     if(!imu.devState){
       mpu.CalibrateAccel(6);
       mpu.CalibrateGyro(6);
-      mpu.setDMPEnabled(true);
-      attachInterrupt(digitalPinToInterrupt(INTERRUPT),dmpReady,RISING);
-      imu.imuInterruptState = mpu.getIntStatus();
-      imu.dmpState = true;
-      
-      packetSize = mpu.dmpGetFIFOPacketSize();
-      imu.euler = (float*)malloc(sizeof(float)*3);
-      imu.ypr = (float*)malloc(sizeof(float)*3);
     }
     else{
       Serial.println("DMP initaled failed");
@@ -368,20 +330,21 @@ void releaseImu(){
 }
 
 void updateImu(){
-      mpu.dmpGetQuaternion(&imu.quater,fifoBuffer);
-      mpu.dmpGetGravity(&imu.gravity,&imu.quater);
-      mpu.dmpGetYawPitchRoll(imu.ypr,&imu.quater,&imu.gravity);
-      imu.gyroX = mpu.getRotationX();
-      imu.gyroX_f = (float)imu.gyroX/32.8;
+    gyro[0]=mpu.getRotationX();
+    gyro[1]=mpu.getRotationY();
+    gyro[2]=mpu.getRotationZ();
+    gyro_f[0]=gyro[0]/32.8;
+    gyro_f[1]=gyro[1]/32.8;
+    gyro_f[2]=gyro[2]/32.8;
 }
 
 void printImu(){
-    Serial.print(F("pitch: "));
-    Serial.println(imu.ypr[1]*180/M_PI);
-    //Serial.print(F("yaw: "));
-    //Serial.println(imu.ypr[0]*180/M_PI);
-    //Serial.print(F("roll: "));
-    //Serial.println(imu.ypr[2]*180/M_PI);
+    Serial.print(F("x: "));
+    Serial.println(gyro[0]/32.8);
+    //Serial.print(F("y: "));
+    //Serial.println(gyro[1]);
+    //Serial.print(F("z: "));
+    //Serial.println(gyro[2]);
 }
 
 void set_motor(int left,int right){
@@ -394,7 +357,7 @@ void set_motor(int left,int right){
     }
     else{
       set_lmotor_dir(HIGH,LOW);
-      analogWrite(LMOTOR_PWM,abs(left));
+      analogWrite(LMOTOR_PWM,-left);
     }
     if(right>=0){
       //adjust here during test
@@ -403,7 +366,7 @@ void set_motor(int left,int right){
     }
     else{
       set_rmotor_dir(HIGH,LOW);
-      analogWrite(RMOTOR_PWM,abs(right));
+      analogWrite(RMOTOR_PWM,-right);
     }
 //    left = abs(constrain(ANGLE2PWM_L*left,-255,255));
 //    right = abs(constrain(ANGLE2PWM_R*right,-255,255));
@@ -438,24 +401,7 @@ void setup_pid(){
 
 int pid(float setVal){
     //mypid.preVal = mypid.curVal;
-    mypid.curVal = imu.ypr[1]*180/M_PI;
-    if(mypid.curVal>=30){
-      return mypid.lastError;
-    }
-    mypid.error = setVal-mypid.curVal;
-    mypid.preVal = mypid.error-mypid.lastError;
-    //Serial.println(mypid.preVal);
-    //if(mypid.preVal>0.25) return mypid.error = mypid.lastError;
-    mypid.sumError += mypid.error;
-   // mypid.sumError = constrain((mypid.sumError),-300,300);
-    int temp = (KP*mypid.error)+(KI*(mypid.sumError))+(KD*mypid.preVal);
-    mypid.lastError = mypid.error;
-    return temp;
-}
-
-int pid2(float setVal){
-    //mypid.preVal = mypid.curVal;
-    mypid.curVal = imu.gyroX_f;
+    mypid.curVal = gyro_f[0];
     mypid.error = setVal-mypid.curVal;
     mypid.preVal = mypid.error-mypid.lastError;
     //Serial.println(mypid.preVal);
