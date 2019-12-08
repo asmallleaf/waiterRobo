@@ -28,25 +28,25 @@
 #define RMOTOR_DIR2 8
 #define RMOTOR_PWM 9
 /*offset of IMU*/
-#define X_ACC_OFFSET 1432
-#define Y_ACC_OFFSET -5462
-#define Z_ACC_OFFSET 898
-#define X_GYRO_OFFSET 44
-#define Y_GYRO_OFFSET 7
-#define Z_GYRO_OFFSET -20//0
+#define X_ACC_OFFSET 1408
+#define Y_ACC_OFFSET -5454
+#define Z_ACC_OFFSET 890
+#define X_GYRO_OFFSET 43
+#define Y_GYRO_OFFSET 5
+#define Z_GYRO_OFFSET -19//0
 /**print config**/
 //#define __STOP__
 #define __TEST__
 //#define __PRINT_OFFSETS__
 //#define __AUTOCALIBRATION__
 //#define __PRINT_MOTOR__
-//#define __PRINT__IMU__
+#define __PRINT_IMU__
 /*basic define constant*/
 #define BASE_TIME 0.05
-#define KP 23 //23///23
-#define KP2 0
-#define KI 0
-#define KD 0.5 //0.5//1
+#define KP 14 //15
+#define KI 1.5 //1.5
+#define KD 35 //30
+const float KR = 1;
 const float ANGLE2PWM_L=0.6;
 const float ANGLE2PWM_R=0.6;
 #define MIN_PWM_L 25
@@ -76,6 +76,7 @@ struct myPID{
     float lastError;
     float error;
     float sumError;
+    float composVal;
     int Kp;
     int Ki;
     int Kd;
@@ -107,15 +108,20 @@ typedef struct MSGS{
 MPU6050 mpu;
 Imu imu;
 myPID mypid={};
-Timer timer;
+Timer timer={};
 
 // MPU control/status vars
 uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
 uint16_t fifoCount;     // count of all bytes currently in FIFO
 uint8_t fifoBuffer[64]; // FIFO storage buffer
-int pwm_val=0;
+float pwm_val=0;
 int pid2_val=0;
 int MAX_LIMIT = 300;
+float set_val = 0;
+float lastDeg = 0;
+float newDeg = 0;
+int isStartTurn = 0;
+int counter = 0;
 volatile bool imuInterrupt = false; // variable in interrupt
 /***********************************************/
 /*             functions                       */
@@ -142,10 +148,13 @@ void calibration();
 void set_motor(int left,int right);
 void set_lmotor_dir(int one,int two);
 void set_rmotor_dir(int one,int two);
+void stepmotor(int turnSpeed);
+void forward();
+int turn();
 
 //PID calculation
 void setup_pid();
-int pid(float setVal);
+float pid(float setVal);
 int pid2(float setVal);
 void printPID();
 
@@ -220,7 +229,6 @@ void loop() {
 
      if((imu.imuInterruptState & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount >= 1024){
       mpu.resetFIFO();
-      //fifoCount = mpu.getFIFOCount();
      }
      else if(imu.imuInterruptState & _BV(MPU6050_INTERRUPT_DMP_INT_BIT)){
       while (fifoCount >= packetSize){
@@ -229,17 +237,34 @@ void loop() {
       }
       
       updateImu();
-      //pid2_val = pid2(0);
-      //Serial.println(pid2_val);
-      pwm_val = pid(0);
-      pwm_val = error2pwm(pwm_val);
-      #ifdef __TEST__
-      //set_motor(200,200);
-      set_motor(pwm_val,pwm_val);
-      #endif
-      #ifdef __STOP__
-      set_motor(0,0);
-      #endif
+      /**turning method example**/
+//      if(!isStartTurn&&counter<1){
+//        lastDeg = imu.ypr[0]*180/M_PI+180;
+//        isStartTurn = 1;
+//        Serial.println("turnning");
+//      }
+//      if(counter>1){
+//        stand();
+//        Serial.println("standing");
+//      }
+//      int tempResult = turn(90);
+//      if(tempResult&&isStartTurn){
+//        isStartTurn = 0;
+//        counter=2;
+//        Serial.println("ending");
+//      }
+      /**move forward**/
+//      start(&timer,5000);
+//      if(timer.isEnd){
+//        stand();
+//        stop(&timer);
+//      }
+//      else{
+//        forward();
+//      }
+//      update(&timer);
+      /**stop**/
+      stand();
       #ifdef __PRINT_IMU__
       printImu();
       #endif
@@ -288,7 +313,7 @@ void setup_driving(){
     mpu.setYAccelOffset(Y_ACC_OFFSET);
     mpu.setZAccelOffset(Z_ACC_OFFSET);
     if(!imu.devState){
-      #ifdef __ATUOCALIBRATION__
+      #ifdef __AUTOCALIBRATION__
       calibration();
       #endif
       mpu.setDMPEnabled(true);
@@ -305,7 +330,7 @@ void setup_driving(){
     }
 }
 
-void Calibration()
+void calibration()
 {
       mpu.CalibrateAccel(6);
       mpu.CalibrateGyro(6);
@@ -338,7 +363,12 @@ void printImu(){
 //    Serial.print(F("pitch: "));
     Serial.print(pwm_val);
     Serial.print(", ");
-    Serial.println(imu.ypr[1]*180/M_PI);
+    Serial.print(set_val+mypid.composVal);
+    Serial.print(", ");
+    Serial.print(imu.ypr[1]*180/M_PI);
+    Serial.print(", ");
+    Serial.print(imu.ypr[0]*180/M_PI);
+    Serial.println();
     //Serial.print(F("yaw: "));
     //Serial.println(imu.ypr[0]*180/M_PI);
     //Serial.print(F("roll: "));
@@ -348,19 +378,30 @@ void printImu(){
 float error2pwm(float val){
   
   if(val>=0){
-    val = map(val,0,MAX_LIMIT,30,255);
-    
+    val = val+60;
     return val;
   }
   else{
-    val = -map(-val,0,MAX_LIMIT,30,255);
+    val = val-60;
     return val;
   }
 }
 
 void set_motor(int left,int right){
-  left = constrain(left,-255,255);
-  right = constrain(right,-255,255);
+//  if(left>=0){
+//    left = constrain(left,0,255);
+//  }
+//  else{
+//    left = constrain(left,-255,0);
+//  }
+//  if(right>=0){
+//    right = constrain(right,0,255);
+//  }
+//  else{
+//    right = constrain(right,-255,0);
+//  }
+    left = constrain(left,-255,255);
+    right = constrain(right,-255,255);
     if(left>=0){
         set_lmotor_dir(LOW,HIGH);
         analogWrite(LMOTOR_PWM,left);
@@ -376,17 +417,17 @@ void set_motor(int left,int right){
     }
     else{
       set_rmotor_dir(HIGH,LOW);
-      if(right>-35&&right<-10)
-        analogWrite(RMOTOR_PWM,abs(right+5));
-        //analogWrite(RMOTOR_PWM,abs(right));
+      if(right>-40&&right<-10)
+        //analogWrite(RMOTOR_PWM,abs(right+5));
+        analogWrite(RMOTOR_PWM,abs(right));
       else
         analogWrite(RMOTOR_PWM,abs(right));
     }
     #ifdef __PRINT_MOTOR__
-    Serial.print("l: ")
+    Serial.print("l: ");
     Serial.print(left);
     Serial.print(", ");
-    Serial.print(r: );
+    Serial.print("r: ");
     Serial.print(right);
     Serial.println();
     #endif
@@ -401,6 +442,60 @@ void set_rmotor_dir(int one,int two){
     digitalWrite(RMOTOR_DIR2,two);
 }
 
+void stepmotor(int turnSpeed){
+    pwm_val = KR*pid(set_val); //1.5
+    if(set_val == 0){
+      if(pwm_val > 0)
+        mypid.composVal += 0.0015;
+      else{
+        mypid.composVal -= 0.0015;
+      }
+    }
+    #ifdef __TEST__
+    set_motor(-turnSpeed+pwm_val,turnSpeed+pwm_val);
+    #endif
+    #ifdef __STOP__
+    set_motor(0,0);
+    #endif
+}
+
+void stand(){
+  if(set_val > 0.5){
+    set_val -= 0.005;
+  }
+  else if(set_val < -0.5){
+    set_val += 0.005; 
+  }
+  else
+    set_val = 0;
+  //pwm_val = error2pwm(pwm_val);
+  stepmotor(0);
+}
+
+void forward(){
+    if (set_val <2.5 && set_val > -2.5){
+      if(set_val >=0){
+        set_val+=0.05;
+      }
+      else{
+        set_val -= 0.05;
+      }
+    }
+    stepmotor(0);
+}
+
+int turn(float deg){
+  newDeg = imu.ypr[0]*180/M_PI+180;
+  if(abs(newDeg-lastDeg)<=deg){
+    stepmotor(30);
+    return 0;
+  }
+  else{
+    //stand();
+    return 1;
+  }
+}
+
 void setup_pid(){
     mypid.curVal = 0;
     mypid.preVal = 0.0;
@@ -413,36 +508,33 @@ void setup_pid(){
 }
 
 
-int pid(float setVal){
+float pid(float setVal){
     //mypid.preVal = mypid.curVal;
     mypid.curVal = imu.ypr[1]*180/M_PI;
-//    if(mypid.curVal>=5.5 || mypid.curVal <=5.5){
-//      MAX_LIMIT = 200;
-//    }
-//    else{
-//      MAX_LIMIT = 325;
-//    }
-    mypid.error = setVal-mypid.curVal;
+    //mypid.curVal = imu.ypr[1];
+    if(mypid.curVal>=30 || mypid.curVal <=-30){
+      mypid.error = 0;
+      mypid.sumError = 0;
+      mypid.lastError = 0;
+      mypid.composVal = 0;
+      return 0;
+    }
+    constrain(mypid.composVal,-2,2);
+    mypid.error = setVal-mypid.curVal+mypid.composVal;
     mypid.preVal = mypid.error-mypid.lastError;
     mypid.sumError += mypid.error;
-    int temp = (KP*mypid.error)+(KI*(mypid.sumError)*0.01)+(KD*mypid.preVal/0.01);
+    mypid.sumError = constrain(mypid.sumError,-400,400);
+    float temp = (KP*mypid.error)+(KI*mypid.sumError)+(KD*mypid.preVal);
     mypid.lastError = mypid.error;
-    return temp;
-}
-
-int pid2(float setVal){
-    //mypid.preVal = mypid.curVal;
-    mypid.curVal = imu.gyroX_f;
-    mypid.error = setVal-mypid.curVal;
-    int temp = KP2*mypid.error;
+    
     return temp;
 }
 
 void printPID(){
     Serial.print("error is: ");
     Serial.println(mypid.error);
-    Serial.print("sum of error is: ");
-    Serial.println(mypid.sumError);
+//    Serial.print("sum of error is: ");
+//    Serial.println(mypid.sumError);
 }
 
 void start(Timer* timer, int times){
