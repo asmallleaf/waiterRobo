@@ -18,7 +18,9 @@
 #define IR_LEFT A1 //0
 #define IR_MIDDLE A2 //1
 #define IR_RIGHT A3 //2
-#define LIMIT4IR 100 //threshold of ir sensor
+#define FORCE A4
+#define LIMIT4SENSOR 300 //threshold of ir sensor
+#define LIMIT4FORCE 50
 #define INTERRUPT 19
 /*Motor config*/
 #define LMOTOR_DIR1 4
@@ -28,19 +30,20 @@
 #define RMOTOR_DIR2 8
 #define RMOTOR_PWM 9
 /*offset of IMU*/
-#define X_ACC_OFFSET 1350
-#define Y_ACC_OFFSET -5428
-#define Z_ACC_OFFSET 890
-#define X_GYRO_OFFSET 43
-#define Y_GYRO_OFFSET 5
-#define Z_GYRO_OFFSET -20//0
+#define X_ACC_OFFSET 1370
+#define Y_ACC_OFFSET -5486
+#define Z_ACC_OFFSET 876
+#define X_GYRO_OFFSET 44
+#define Y_GYRO_OFFSET 4
+#define Z_GYRO_OFFSET -19//0
 /**print config**/
-#define __STOP__
-//#define __TEST__
+//#define __STOP__
+#define __TEST__
 //#define __PRINT_OFFSETS__
 //#define __AUTOCALIBRATION__
 //#define __PRINT_MOTOR__
 //#define __PRINT_IMU__
+#define __PRINT_SENSORS__
 /*basic define constant*/
 #define BASE_TIME 0.05
 #define KP 14 //15
@@ -53,6 +56,7 @@ const float ANGLE2PWM_R=0.6;
 #define MIN_PWM_R 27
 #define MAX_DEG 25
 #define MAX_I_LIMIT 325
+#define MOV_SPEED 2.5 //2.5
 /***********************************************/
 /*          self defined structures            */
 /***********************************************/
@@ -68,6 +72,8 @@ struct Imu{
   uint8_t devState;
   int16_t gyroX;
   float gyroX_f;
+  float last_yaw;
+  bool isFlip = false;
 };
 
 struct myPID{
@@ -85,6 +91,7 @@ struct myPID{
 typedef struct TIMER{
     int set;
     int now;
+    bool isFirst = true;
     unsigned long time_stamp1;
     unsigned long time_stamp2;
     int isEnd;
@@ -111,6 +118,7 @@ myPID mypid={};
 Timer timer={};
 Timer timer2 ={};
 Timer timer3={};
+Timer timer4={};
 
 // MPU control/status vars
 uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
@@ -122,16 +130,29 @@ int MAX_LIMIT = 300;
 float set_val = 0;
 float lastDeg = 0;
 float newDeg = 0;
+float initDeg = 0;
 int isStartTurn = 0;
 int counter = 0;
 volatile bool imuInterrupt = false; // variable in interrupt
 
 // sensors gloable variable
 int ir_sensors[3]={};
+int forceVal = 0;
+/***********************************************/
+/*             define sensors  (jyh)                     */
+/***********************************************/
+// sensors gloable variable
+int irSensorLeftAnalogPin = 1;
+int irSensorMiddleAnalogPin = 2;
+int irSensorRightAnalogPin = 3;
+int irSensorLeftRd;
+int irSensorMiddleRd;
+int irSensorRightRd;
+//int ir_sensors[]={};
 enum IR_NUM{
   LEFT,MIDDLE,RIGHT
 }irnum;
-//ir_sensors[LEFT];
+int mov_state = -1;
 
 /***********************************************/
 /*             functions                       */
@@ -141,9 +162,9 @@ enum IR_NUM{
 void setup_driving();
 
 //sensors operation
-void update(int* sensors,int size);
-int check(int sensor);
-int* checks(int* sensors,int size);
+void updateSensors();
+void printSensors();
+int decision();
 
 //IMU operation
 void dmpReady(){imuInterrupt = true;}
@@ -162,6 +183,7 @@ void stepmotor(int turnSpeed);
 void forward();
 int turn();
 void stand();
+void move(int time_go,int time_stop);
 
 //PID calculation
 void setup_pid();
@@ -173,7 +195,8 @@ void printPID();
 void start(Timer* timer, int time);
 void update(Timer* timer);
 void stop(Timer* timer);
-void reset(Timer* timer,int time);
+bool is_start(Timer* timer);
+bool is_end(Timer* timer);
 
 //bluetooth operation
 // initial bluetooth
@@ -217,14 +240,15 @@ void loop() {
         fifoCount = mpu.getFIFOCount();
       }
       //Serial.println("run motor!");
-      start(&timer,10);
+      if(timer.isFirst)
+        start(&timer,10);
       update(&timer);
       if(!timer.isEnd)continue;
 //      pwm_val = pid2(0.2);
 //      Serial.print("pwm: ");
 //      Serial.println(pwm_val);
 
-      reset(&timer,10);
+      start(&timer,10);
       //Serial.println(pwm_val);
       //hprintImu();
       //printPID();
@@ -244,14 +268,82 @@ void loop() {
       }
       
       updateImu();
+      updateSensors();
+      if(mov_state == -1){
+        mov_state = decision();
+        Serial.println(mov_state);
+      }
+      if(mov_state == 0){
+        Serial.println("move");
+        move(5000,2000);
+        mov_state = -1;
+      }
+      else if(mov_state == 1){
+        if(timer4.isFirst)
+          start(&timer4,3000);
+        if(is_start(&timer4)){
+          Serial.println("stand");
+          stand();
+        }
+        else{
+          stop(&timer4);
+          if(turn(-90)){
+            Serial.println("turn left");
+            mov_state=-1;
+            timer4.isFirst =true;
+            timer4.isEnd = 0;
+          }
+          else
+            Serial.println("turnning left");
+        }
+      }
+      else if(mov_state == 2){
+        if(timer4.isFirst)
+          start(&timer4,3000);
+        if(is_start(&timer4)){
+          Serial.println("stand2");
+          stand();
+        }
+        else{
+          stop(&timer4);
+          if(turn(90)){
+            Serial.println("turn right");
+            mov_state=-1;
+            timer4.isFirst =true;
+            timer4.isEnd = 0;
+          }
+          else
+            Serial.println("turnning right");
+        }
+      }
+      else if(mov_state == 3){
+          if(timer4.isFirst)
+            start(&timer4,3000);
+          if(is_start(&timer4)){
+            Serial.println("stand3");
+            stand();
+          }
+          else{
+            stop(&timer4);
+            if(turn(180)){
+              Serial.println("turn 180");
+              mov_state=-1;
+              timer4.isFirst =true;
+              timer4.isEnd = 0;
+            }
+          else
+            Serial.println("turnning back");
+          }
+      }
+      update(&timer4);
       /**turning method example**/
 //      int tempResult = 0;
 //      if(!isStartTurn&&counter<1){
-//        lastDeg = imu.ypr[0]*180/M_PI+180;
+//        lastDeg = imu.ypr[0];
 //        isStartTurn = 1;
 //        Serial.println("turnning");
 //      }
-//      if(counter>1){
+//      if(counter==2){
 //        // mypid.composVal = 0;
 //        stand();
 //        Serial.println("standing");
@@ -265,7 +357,8 @@ void loop() {
 //        Serial.println("ending");
 //      }
       /**move forward example**/
-      //void move(int time_go,int time stop); // go Xs and stop Ys
+      //move(2000,2000); // go Xs and stop Ys
+      
 //      start(&timer2, 2000);
 //      if(timer2.isStart){
 //        Serial.println("forward");
@@ -301,6 +394,9 @@ void loop() {
       
       #ifdef __PRINT_IMU__
       printImu();
+      #endif
+      #ifdef __PRINT_SENSORS__
+      printSensors();
       #endif
      }
 }
@@ -364,30 +460,58 @@ void setup_driving(){
     }
 }
 
-void update(int* sensors,int size){
+void updateSensors(){
   //ir_sensor[left] = analogRead(IR_LEFT);
-  
+    forceVal = analogRead(FORCE);
+    irSensorLeftRd = analogRead(irSensorLeftAnalogPin);
+    irSensorMiddleRd = analogRead(irSensorMiddleAnalogPin);
+    irSensorRightRd = analogRead(irSensorRightAnalogPin);
 }
 
-// ir_cal_sensor = check(ir_sensor[left]);
-int check(int sensor){
-  if(sensor>LIMIT4IR)
-  {
-    return 1;
-  }
-  else{
-    return 0;
-  }
+int decision(){
+if ((irSensorMiddleRd >= LIMIT4SENSOR && irSensorLeftRd >= LIMIT4SENSOR && irSensorRightRd >= LIMIT4SENSOR)
+            or(irSensorLeftRd >= LIMIT4SENSOR && irSensorRightRd >= LIMIT4SENSOR)){
+//      turn 180 degree's
+        return 3;
+
+      }
+      else if (irSensorLeftRd >= LIMIT4SENSOR && irSensorMiddleRd >= LIMIT4SENSOR){
+//      turn rignt
+         return 2;
+
+      }
+      else if (irSensorRightRd >= LIMIT4SENSOR && irSensorMiddleRd >= LIMIT4SENSOR){
+//      turn left
+        return 1;
+      }
+      else if (irSensorLeftRd >= LIMIT4SENSOR){
+//      turn right
+        return 2;
+      }
+      else if (irSensorRightRd >= LIMIT4SENSOR){
+//      turn left
+        return 1;
+      }
+      else if (irSensorMiddleRd >= LIMIT4SENSOR){
+//      turn any direction~
+         return 1;
+      }
+      else {
+//      move forward~
+        return 0;
+      }
 }
 
-int* checks(int* sensors,int size){
-}
-
-int decision(int ){
-//  if()
-//  else if()
-//  else if()
-//  else
+void printSensors(){
+//  Serial.print(forceVal);
+//  Serial.print(", ");
+  Serial.print(irSensorLeftRd);
+  Serial.print(",");
+  Serial.print(irSensorMiddleRd);
+  Serial.print(", ");
+  Serial.print(irSensorRightRd);
+  Serial.print(",");
+  Serial.println();
 }
 
 void calibration()
@@ -408,6 +532,21 @@ void updateImu(){
       mpu.dmpGetQuaternion(&imu.quater,fifoBuffer);
       mpu.dmpGetGravity(&imu.gravity,&imu.quater);
       mpu.dmpGetYawPitchRoll(imu.ypr,&imu.quater,&imu.gravity);
+      imu.ypr[0] = imu.ypr[0]*180/M_PI/2+90;
+      imu.ypr[1] = imu.ypr[1]*180/M_PI;
+      if(imu.isFlip){
+          if(abs(imu.ypr[0]+180-imu.last_yaw)>150)
+             imu.isFlip = !imu.isFlip;
+      }
+      else{
+        if(abs(imu.ypr[0]-imu.last_yaw)>150)
+            imu.isFlip = !imu.isFlip;
+      }
+      if(imu.isFlip){
+        imu.ypr[0]+=180;
+        //Serial.println("hello");
+      }
+      imu.last_yaw = imu.ypr[0];
       //imu.gyroX = mpu.getRotationX();
       //imu.gyroX_f = (float)imu.gyroX/32.8;
 }
@@ -425,9 +564,9 @@ void printImu(){
     Serial.print(", ");
     Serial.print(set_val+mypid.composVal);
     Serial.print(", ");
-    Serial.print(imu.ypr[1]*180/M_PI);
+    Serial.print(imu.ypr[1]);
     Serial.print(", ");
-    Serial.print(imu.ypr[0]*180/M_PI+180);
+    Serial.print(imu.ypr[0]);
     Serial.println();
     //Serial.print(F("yaw: "));
     //Serial.println(imu.ypr[0]*180/M_PI);
@@ -478,8 +617,8 @@ void set_motor(int left,int right){
     else{
       set_rmotor_dir(HIGH,LOW);
       if(right>-40&&right<-10)
-        //analogWrite(RMOTOR_PWM,abs(right+5));
-        analogWrite(RMOTOR_PWM,abs(right));
+        analogWrite(RMOTOR_PWM,abs(right+5));
+        //analogWrite(RMOTOR_PWM,abs(right));
       else
         analogWrite(RMOTOR_PWM,abs(right));
     }
@@ -503,7 +642,6 @@ void set_rmotor_dir(int one,int two){
 }
 
 void stepmotor(int turnSpeed){
-  
     pwm_val = KR*pid(set_val); //1.5
     if(set_val == 0){
       if(pwm_val > 0)
@@ -516,10 +654,11 @@ void stepmotor(int turnSpeed){
       mypid.composVal =0;
     }
     #ifdef __TEST__
-    if(turnSpeed <= 0)
+    if(turnSpeed <= 0){
       set_motor(-turnSpeed+pwm_val,turnSpeed+pwm_val);
+    }
     else
-      set_motor(turnSpeed+pwm_val,-turnSpeed+pwm_val);
+      set_motor(-turnSpeed+pwm_val,turnSpeed+pwm_val);
     #endif
     #ifdef __STOP__
     set_motor(0,0);
@@ -544,34 +683,63 @@ void forward(){
 //      set_val +=0.005;
 //    }
 //    constrain(set_val,0,2);
-    set_val = 4.5;
+    set_val = MOV_SPEED;
     stepmotor(0);
 }
 
 int turn(float deg){
+  if(counter == 0){
+    lastDeg = imu.ypr[0];
+    ++counter;
+  }
   if(deg >= 0 ) // turn left
   {
-    newDeg = imu.ypr[0]*180/M_PI+180;
+    newDeg = imu.ypr[0];
     if(abs(newDeg-lastDeg)<=deg){
       stepmotor(40);
       return 0;
     }
     else{
+      counter = 0;
       //stand();
       return 1;
     }
+      //stepmotor(40);
   }
   else{ //turn right
-    newDeg = imu.ypr[0]*180/M_PI+180;
-    if(abs(newDeg-lastDeg)<=deg){
+    
+    newDeg = imu.ypr[0];
+    if(abs(newDeg-lastDeg)<=abs(deg)){
       stepmotor(-40);
       return 0;
     }
     else{
+      counter = 0;
       //stand();
       return 1;
     }
+    //stepmotor(-40);
   }
+
+}
+
+void move(int time_go,int time_stop){
+  if(timer2.isFirst)
+    start(&timer2,time_go);
+  if(is_start(&timer2)){
+    forward();
+  }
+  if(is_end(&timer2)){
+    start(&timer3,time_stop);
+  }
+  if(is_start(&timer3)){
+    stand();
+  }
+  if(is_end(&timer3)){
+    start(&timer2,time_go);
+  }
+  update(&timer2);
+  update(&timer3);
 }
 
 void setup_pid(){
@@ -588,7 +756,7 @@ void setup_pid(){
 
 float pid(float setVal){
     //mypid.preVal = mypid.curVal;
-    mypid.curVal = imu.ypr[1]*180/M_PI;
+    mypid.curVal = imu.ypr[1];
     //mypid.curVal = imu.ypr[1];
     if(mypid.curVal>=40 || mypid.curVal <=-40){
       mypid.error = 0;
@@ -617,36 +785,65 @@ void printPID(){
 }
 
 void start(Timer* timer, int times){
-    if(timer->isStart==0 && timer->isEnd == 0){
+  if (!timer->isFirst){
+      if (timer->isEnd == 1){
+        timer->now=0;
+        timer->isStart=1;
+        timer->isEnd=0;
         timer->set = times;
-        timer->now = 0;
-        timer->isStart = 1;
-        timer->isEnd = 0;
-        timer->time_stamp1= millis();
+        timer->time_stamp1 = millis();
     }
+  }
+  else{
+    if(timer->isStart==0 && timer->isEnd == 0){
+      timer->set = times;
+      timer->now = 0;
+      timer->isStart = 1;
+      timer->isEnd = 0;
+      timer->isFirst=false;
+      timer->time_stamp1= millis();
+    }
+  }
 }
 
 void update(Timer* timer){
-    if(timer->isStart==1&&timer->isEnd!=1){
+    if(timer->isStart==1&&timer->isEnd == 0){
         timer->time_stamp2 = millis();
         timer->now = timer->time_stamp2-timer->time_stamp1;
         if((timer->now)>=(timer->set)){
-          timer->isEnd=1;
-      }
+          timer->isEnd = 1;
+        } 
     }
 }
 
 void stop(Timer* timer){
-    timer->isEnd=1;
-    timer->isStart=0;
+    if(timer->isStart == 1){
+      timer->isEnd = 1;
+      timer->isStart = 0;
+    }
 }
 
-void reset(Timer* timer,int times){
-    timer->now=0;
-    timer->isStart=1;
-    timer->isEnd=0;
-    timer->set = times;
-    timer->time_stamp1 = millis();
+bool is_start(Timer* timer){
+  if(timer->isStart && !timer->isEnd)
+    return 1;
+  else
+    return 0; 
+}
+bool is_end(Timer* timer){
+  if(timer->isEnd && timer->isStart){
+    stop(timer);
+    return 1; 
+  }
+  else
+    return 0;
+}
+
+bool is_hang(Timer* timer){
+  if(timer->isEnd && !timer->isStart){
+    return 1;
+  }
+  else
+    return 0;
 }
 
 void setBt(){
