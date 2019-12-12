@@ -18,7 +18,7 @@
 #define IR_LEFT A1 //0
 #define IR_MIDDLE A2 //1
 #define IR_RIGHT A3 //2
-#define FORCE A4
+#define FORCE A8
 #define LIMIT4SENSOR 300 //threshold of ir sensor
 #define LIMIT4FORCE 50
 #define INTERRUPT 19
@@ -43,7 +43,7 @@
 //#define __AUTOCALIBRATION__
 //#define __PRINT_MOTOR__
 //#define __PRINT_IMU__
-#define __PRINT_SENSORS__
+//#define __PRINT_SENSORS__
 /*basic define constant*/
 #define BASE_TIME 0.05
 #define KP 14 //15
@@ -56,7 +56,7 @@ const float ANGLE2PWM_R=0.6;
 #define MIN_PWM_R 27
 #define MAX_DEG 25
 #define MAX_I_LIMIT 325
-#define MOV_SPEED 2.5 //2.5
+#define MOV_SPEED 2.7 //2.5
 /***********************************************/
 /*          self defined structures            */
 /***********************************************/
@@ -409,6 +409,7 @@ void setup_driving(){
     pinMode(IR_MIDDLE,INPUT);
     pinMode(IR_LEFT,INPUT);
     pinMode(IR_RIGHT,INPUT);
+    //pinMode(FORCE,INPUT);
     pinMode(LMOTOR_DIR1,OUTPUT);
     pinMode(LMOTOR_DIR2,OUTPUT);
     pinMode(LMOTOR_PWM,OUTPUT);
@@ -462,7 +463,7 @@ void setup_driving(){
 
 void updateSensors(){
   //ir_sensor[left] = analogRead(IR_LEFT);
-    forceVal = analogRead(FORCE);
+    //forceVal = analogRead(FORCE);
     irSensorLeftRd = analogRead(irSensorLeftAnalogPin);
     irSensorMiddleRd = analogRead(irSensorMiddleAnalogPin);
     irSensorRightRd = analogRead(irSensorRightAnalogPin);
@@ -510,7 +511,8 @@ void printSensors(){
   Serial.print(irSensorMiddleRd);
   Serial.print(", ");
   Serial.print(irSensorRightRd);
-  Serial.print(",");
+//  Serial.print(",");
+//  Serial.print(forceVal);
   Serial.println();
 }
 
